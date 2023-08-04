@@ -1,0 +1,156 @@
+# functions
+# backpack function
+
+function open(p: player):
+	set {-backpack::%uuid of {_p}%::slot} to index of hotbar slot of {_p}
+	set {_nbt} to nbt compound of tool of {_p}
+	set {_items::*} to compound list tag "Backpack;items" of {_nbt}
+	set {_rows} to tag "Row" of {_nbt}
+	set metadata tag "Backpack" of {_p} to chest inventory with {_rows} rows named "Backpack"
+	loop {_items::*}:
+		set {_slot} to int tag "Slot" of loop-value
+		set {_item} to nbt item from loop-value
+		set slot {_slot} of metadata tag "Backpack" of {_p} to {_item}
+	open (metadata tag "Backpack" of {_p}) to {_p}
+
+function save(p: player):
+	set {_nbt} to nbt of tool of {_p}
+	loop items in current inventory of {_p}:
+		set {_slot} to index of loop-slot
+		set {_item} to full nbt of loop-slot
+		set int tag "Slot" of {_item} to {_slot}
+		add {_item} to {_items::*}
+	set compound list tag "Backpack;items" of {_nbt} to {_items::*}
+	set {_size} to size of {_items::*}
+	set {_storage} to int tag "Row" of {_nbt} * 9
+	set lore of tool of {_p} to "&7Storage: &f%{_size}%&f/&f%{_storage}%"
+
+function upgrade(p: player):
+	set {_nbt} to nbt compound of tool of {_p}
+	if {_nbt} has tag "Backpack":
+		set {_row} to tag "Row" of {_nbt}
+		if {_row} = 6:
+			message "&cThis Backpack is already Maxed!" to {_p}
+			stop
+		else:
+			set int tag "Row" of {_nbt} to {_row} + 1
+			message "&aSuccesfully Upgraded Backpack!" to {_p}
+	else:
+		message "&cYour not holding a Backpack!" to {_p}
+
+# upgrading functions
+
+function drop(p: player, b: block, i: item):
+	drop 1 of {_i} 0.5 above {_b} without velocity
+	set {_d} to last dropped item
+	set gravity of {_d} to false
+	le spawn text display 1 meter above {_d}
+	set {_n} to last spawned entity
+	set display text of {_n} to "&bReady To Upgrade?"
+	le spawn text display 0.5 meter above {_d}
+	set {_n} to last spawned entity
+	set display text of {_n} to "&aYes"
+	le spawn interaction 
+	set tag "Owner" of nbt of {_d} to uuid int array #no one can pick up
+	set tag "Age" of nbt of {_d} to -32768 #wont despawn
+	set string tag "custom;item" of nbt of {_b} to uuid of {_d}
+	remove {_i} from {_p}
+
+on right click on anvil:
+	if nbt compound of event-block has tag "custom;upgrade":
+		cancel event
+		if nbt of player's tool has tag "Backpack":
+			if nbt of event-block doesn't have tag "custom;item":
+				cancel event
+				drop 1 of player's tool 0.5 above event-block without velocity
+				set {_d} to last dropped item
+				set gravity of {_d} to false
+				set display name of {_d} to "&bReady To Upgrade? Right click"
+				set tag "Owner" of nbt of {_d} to uuid int array #no one can pick up
+				set tag "Age" of nbt of {_d} to -32768 #wont despawn
+				set string tag "custom;item" of nbt of event-block to uuid of {_d}
+				set player's tool to air
+				stop
+			else:
+				cancel event
+				message "&cThis anvil is in use!" to player
+				stop
+		else:
+			if player's tool is air:
+				if player is sneaking:
+					cancel event
+					if nbt of event-block has tag "custom;item":
+						#upgrade animation
+						# to do
+						message "UPGRAIDNG TIME BUDDY" to player
+						stop
+					else:
+						message "&cNo backpack is currently loaded!" to player
+						stop
+				else:
+					cancel event
+					set {_e} to string tag "custom;item" of nbt of event-block
+					delete tag "custom;item" of nbt of event-block
+					set {_e} to {_e} parsed as entity
+					give player 1 of item of {_e}
+					kill {_e}
+					stop
+			else:
+				cancel event
+				message "&cYou can not hold any items!" to player
+				stop	
+
+
+# events
+
+on inventory close:
+	if {-backpack::%uuid of player%::slot} is set:
+		delete {-backpack::%uuid of player%::slot}
+		save(player)
+
+on inventory click:
+	if clicked inventory = player's inventory:
+		if index of clicked slot = {-backpack::%uuid of player%::slot}:
+			cancel event
+	if hotbar button = {-backpack::%uuid of player%::slot}:
+		cancel event
+
+on right click:
+	if nbt of player's tool has tag "Backpack":
+		cancel event
+		if target block is not an anvil:
+			open(player)
+	else if nbt of player's offhand tool has tag "Backpack":
+		cancel event
+
+on command:
+	if {-backpack::%uuid of player%::slot} is set:
+		cancel event
+
+on quit:
+	delete {-backpack::%uuid of player%::slot}
+
+on load:
+	set {-backpack} to player head with nbt from "{Backpack:[],Row:[],SkullOwner:{Id:[I;510715374,1166298671,-1907452085,-103514595],Properties:{textures:[{Value:""eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvZmE0NjRmZWUyZjllNWQzMGI4MzM0NzZjMzBlMTFhMTVjYzQ4NTU0MDJmYmVhODNiZDU3MTdkM2EyNzdiNGZkYyJ9fX0=""}]}}}"
+	set name of {-backpack} to "&eBee Pack"
+
+# commands
+
+command /backpack <int>:
+	trigger:
+		set {_i} to {-backpack}
+		set {_n} to nbt compound from {_i}
+		set {backpack.id} to {backpack.id} + 1
+		set int tag "id" of {_n} to {backpack.id}
+		set int tag "Row" of {_n} to arg-1
+		set {_storage} to arg * 9
+		set lore of {_i} to "&7Storage: &f0&f/&f%{_storage}%"
+		give player {_i}
+
+command /upgrade:
+	trigger:
+		upgrade(player)
+
+command /anvilupgrade:
+	trigger:
+		set tag "custom;upgrade" of nbt from target block to 1
